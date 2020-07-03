@@ -2,6 +2,7 @@ import random
 from collections import deque
 import numpy as np
 import tensorflow as tf
+from my_network import DQNNetwork
 
 
 class Agent:
@@ -16,7 +17,7 @@ class Agent:
             replace_target_iter=300,
             reward_decay=0.9,
             e_greedy=0.9,
-            e_greedy_increment=None,
+            e_greedy_increment=0.01,
             memory_size=40
     ):
         # 输入参数
@@ -31,7 +32,7 @@ class Agent:
         self.gamma = reward_decay
         self.epsilon_max = e_greedy
         self.epsilon_increment = e_greedy_increment
-        self.epsilon = 0 if e_greedy_increment is not None else self.epsilon_max
+        self.epsilon = 0.0 if e_greedy_increment is not None else self.epsilon_max
         # 学习步数
         self.learn_step_counter = 0
         # 初始化memory pool [s, a, r, s_]
@@ -39,24 +40,16 @@ class Agent:
         self.memory_size = memory_size
         self.memory = deque(maxlen=memory_size)
         # evaluate_net和target_net
-        self.evaluate_net = self.build_net()
-        self.target_net = self.build_net()
-        self.connect = np.loadtxt('./connect.csv', delimiter=',', dtype=int)
+        self.evaluate_net = DQNNetwork(n_features=self.n_features,
+                                       n_actions=self.n_actions)
+        self.target_net = DQNNetwork(n_features=self.n_features,
+                                     n_actions=self.n_actions)
+        self.loss = tf.keras.losses.MeanSquaredError()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4, epsilon=1e-6)
+        self.train_loss = tf.keras.metrics.Mean(name='train_loss')
+        self.train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
 
-    def build_net(self):
-        model = tf.keras.models.Sequential([
-                  tf.keras.layers.Flatten(input_shape=(self.n_features,)),
-                  tf.keras.layers.Dense(256, activation='relu'),
-                  # tf.keras.layers.Dense(256, activation='relu'),
-                  # tf.keras.layers.Dense(256, activation='relu'),
-                  tf.keras.layers.Dense(128, activation='relu'),
-                  tf.keras.layers.Dropout(0.2),
-                  tf.keras.layers.Dense(self.n_actions, activation='softmax')
-                ])
-        model.compile(optimizer='adam',
-                      loss='categorical_crossentropy',
-                      metrics=['accuracy'])
-        return model
+        self.connect = np.loadtxt('./connect.csv', delimiter=',', dtype=int)
 
     def save_model(self, episode):
         self.target_net.save(str(episode)+'.h5')
@@ -67,18 +60,12 @@ class Agent:
         self.memory_counter += 1
 
     def choose_action(self, observation):
-        while True:
-            hhhhhhh = False
-            if np.random.uniform() < self.epsilon:
-                observation_reshaped = tf.reshape(observation, [-1, 2])
-                actions_value = self.evaluate_net.predict(observation_reshaped)
-                action = np.argmax(actions_value[0])
-            else:
-                action = np.random.randint(0, self.n_actions)  # 完全随机选择
-                hhhhhhh = True
-            if self.connect[observation[0], action] != 0:
-                print(hhhhhhh)
-                break
+        if np.random.uniform() < self.epsilon:
+            observation_reshaped = tf.reshape(observation, [-1, 2])
+            actions_value = self.evaluate_net.predict(observation_reshaped)
+            action = np.argmax(actions_value[0])
+        else:
+            action = np.random.randint(0, self.n_actions)  # 完全随机选择
         return int(action)
 
     def learn(self):
@@ -91,30 +78,41 @@ class Agent:
             self.target_net.set_weights(self.evaluate_net.get_weights())
             print('\ntarget_params_replaced\n')
 
-        # 从 memory pool 中采样
+        # 从 memory pool 中采样并解析S,A,R,S_
         batch_memory = random.sample(self.memory, self.batch_size)
         batch_s = []
+        batch_action = []
+        batch_reward = []
         batch_s_ = []
         for replay in batch_memory:
             batch_s.append(replay[0])
+            batch_action.append(replay[1])
+            batch_reward.append(replay[2])
             batch_s_.append(replay[3])
-        q_eval = self.evaluate_net.predict(batch_s)
-        q_next = self.target_net.predict(batch_s_)
-        print("before, q_eval=", q_eval)
-        print("before, q_next=", q_next)
+        batch_s = tf.reshape(batch_s, [-1, 2])
+        batch_action = tf.reshape(batch_action, [-1, ])
+        batch_reward = tf.reshape(batch_reward, [-1, ])
+        batch_s_ = tf.reshape(batch_s_, [-1, 2])
         # 使用公式更新Q值
-        for i, replay in enumerate(batch_memory):
-            _, a, reward, _ = replay
-            q_eval[i][a] = (1 - self.lr) * q_eval[i][a] + self.lr * (reward + self.gamma * np.amax(q_next[i]))
-
-        print("after, q_eval_=", q_eval)
+        with tf.GradientTape() as tape:
+            q_online = self.evaluate_net.predict(batch_s_)
+            action_q_online = tf.math.argmax(q_online, axis=1)
+            q_target = self.target_net.predict(batch_s_)
+            ddqn_q = tf.reduce_sum(q_target * tf.one_hot(action_q_online, self.n_actions, 1.0, 0.0), axis=1)
+            expected_q = batch_reward + 0.99 * ddqn_q
+            main_q = tf.reduce_sum(self.evaluate_net.predict(batch_s) * tf.one_hot(batch_action, self.n_actions, 1.0, 0.0), axis=1)
+            loss = self.loss(tf.stop_gradient(expected_q), main_q)
+            tape.watch(self.evaluate_net.trainable_variables)
+            print("---------------------------------------------------")
+            print("main_q", main_q)
+            print("expected_q", expected_q)
+            print("loss", loss)
         # 训练 evaluate_net
-        batch_s_shaped = tf.reshape(batch_s, [-1, 2])
-        self.evaluate_net.fit(batch_s_shaped, q_eval)
-        print(batch_s_shaped)
-        print("\n")
-        print(q_eval)
-        print("\n")
+        gradients = tape.gradient(loss, self.evaluate_net.trainable_variables)
+        print("gradients", gradients)
+        self.optimizer.apply_gradients(zip(gradients, self.evaluate_net.trainable_variables))
+        self.train_loss(loss)
+        self.train_accuracy(expected_q, main_q)
 
         # 增加 epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
