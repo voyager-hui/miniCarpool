@@ -32,7 +32,7 @@ class Env:
 
     # 执行决策
     def taxi_refresh(self, action):
-        self.myreward = 0.0
+        self.myreward = -1.0
 
         # 更新出租车位置
         next_loc = self.connect[self.taxi_loc, action]
@@ -41,11 +41,14 @@ class Env:
             # 是否到达上车点
             if self.taxi_loc == 11 and self.flag:
                 self.flag = False
-                self.myreward = 3.0
+                self.myreward = 30.0
             # 是否到达下车点
             if self.taxi_loc == 15 and not self.flag:
                 self.done = True
-                self.myreward = 5.0
+                self.myreward = 50.0
+            # if self.taxi_loc == 7:
+            #     self.done = True
+            #     self.myreward = 5.0
         else:  # 决策无效
             self.myreward = -1.0
 

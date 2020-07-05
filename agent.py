@@ -10,21 +10,17 @@ class Agent:
             self,
             n_features=2,
             n_actions=16,
-            IMG_HEIGHT=300,
-            IMG_WIDTH=300,
             learning_rate=0.01,
             batch_size=32,
             replace_target_iter=300,
             reward_decay=0.9,
             e_greedy=0.9,
-            e_greedy_increment=0.01,
+            e_greedy_increment=0.001,
             memory_size=40
     ):
         # 输入参数
         self.n_features = n_features
         self.n_actions = n_actions
-        self.IMG_HEIGHT = IMG_HEIGHT
-        self.IMG_WIDTH = IMG_WIDTH
         # 神经网络和DQN参数
         self.lr = learning_rate
         self.batch_size = batch_size
@@ -44,15 +40,15 @@ class Agent:
                                        n_actions=self.n_actions)
         self.target_net = DQNNetwork(n_features=self.n_features,
                                      n_actions=self.n_actions)
-        self.loss = tf.keras.losses.MeanSquaredError()
+        self.loss = tf.keras.losses.BinaryCrossentropy()
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4, epsilon=1e-6)
         self.train_loss = tf.keras.metrics.Mean(name='train_loss')
-        self.train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
+        self.train_accuracy = tf.keras.metrics.BinaryCrossentropy(name='train_accuracy')
 
         self.connect = np.loadtxt('./connect.csv', delimiter=',', dtype=int)
 
     def save_model(self, episode):
-        self.target_net.save(str(episode)+'.h5')
+        self.target_net.save(str(episode)+'.h5', save_format="tf")
         print("Target_net model saved to h5 file.")
 
     def store_transition(self, s, a, r, s_):
@@ -60,11 +56,14 @@ class Agent:
         self.memory_counter += 1
 
     def choose_action(self, observation):
+        # print("epsilon:", self.epsilon)
         if np.random.uniform() < self.epsilon:
+            # print("NN")
             observation_reshaped = tf.reshape(observation, [-1, 2])
-            actions_value = self.evaluate_net.predict(observation_reshaped)
+            actions_value = self.evaluate_net(observation_reshaped)
             action = np.argmax(actions_value[0])
         else:
+            # print("Random")
             action = np.random.randint(0, self.n_actions)  # 完全随机选择
         return int(action)
 
@@ -95,24 +94,24 @@ class Agent:
         batch_s_ = tf.reshape(batch_s_, [-1, 2])
         # 使用公式更新Q值
         with tf.GradientTape() as tape:
-            q_online = self.evaluate_net.predict(batch_s_)
+            q_online = self.evaluate_net(batch_s_)
             action_q_online = tf.math.argmax(q_online, axis=1)
-            q_target = self.target_net.predict(batch_s_)
+            q_target = self.target_net(batch_s_)
             ddqn_q = tf.reduce_sum(q_target * tf.one_hot(action_q_online, self.n_actions, 1.0, 0.0), axis=1)
             expected_q = batch_reward + 0.99 * ddqn_q
-            main_q = tf.reduce_sum(self.evaluate_net.predict(batch_s) * tf.one_hot(batch_action, self.n_actions, 1.0, 0.0), axis=1)
-            loss = self.loss(tf.stop_gradient(expected_q), main_q)
-            tape.watch(self.evaluate_net.trainable_variables)
-            print("---------------------------------------------------")
-            print("main_q", main_q)
-            print("expected_q", expected_q)
-            print("loss", loss)
+            main_q = tf.reduce_sum(self.evaluate_net(batch_s) * tf.one_hot(batch_action, self.n_actions, 1.0, 0.0), axis=1)
+            loss = self.loss(main_q, tf.stop_gradient(expected_q))
+            # print("---------------------------------------------------")
+            # print("main_q", main_q)
+            # print("expected_q", expected_q)
+            # print("loss", loss)
         # 训练 evaluate_net
         gradients = tape.gradient(loss, self.evaluate_net.trainable_variables)
-        print("gradients", gradients)
+        # print("gradients", gradients)
         self.optimizer.apply_gradients(zip(gradients, self.evaluate_net.trainable_variables))
         self.train_loss(loss)
         self.train_accuracy(expected_q, main_q)
+        print(self.train_loss.result(), self.train_accuracy.result())
 
         # 增加 epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max

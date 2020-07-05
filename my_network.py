@@ -9,10 +9,10 @@ class DQNNetwork(Model):
         self.flatten = Flatten(input_shape=(n_features,))
         self.d1 = Dense(128, activation='relu')
         self.d2 = Dense(128, activation='relu')
-        self.d3 = Dense(n_actions, activation='linear')
+        self.d3 = Dense(n_actions, activation='softmax')
 
     def call(self, x):
-        x = self.flatten(x)
-        x = self.d1(x)
-        x = self.d2(x)
-        return self.d3(x)
+        x1 = self.flatten(x)
+        x2 = self.d1(x1)
+        x3 = self.d2(x2)
+        return self.d3(x3)
