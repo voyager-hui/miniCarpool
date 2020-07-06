@@ -7,23 +7,19 @@ import tensorflow as tf
 class Agent:
     def __init__(
             self,
-            n_features,
-            n_actions,
-            IMG_HEIGHT=300,
-            IMG_WIDTH=300,
+            n_features=2,
+            n_actions=16,
             learning_rate=0.01,
             batch_size=32,
             replace_target_iter=300,
             reward_decay=0.9,
             e_greedy=0.9,
             e_greedy_increment=None,
-            memory_size=500
+            memory_size=40
     ):
         # 输入参数
         self.n_features = n_features
         self.n_actions = n_actions
-        self.IMG_HEIGHT = IMG_HEIGHT
-        self.IMG_WIDTH = IMG_WIDTH
         # 神经网络和DQN参数
         self.lr = learning_rate
         self.batch_size = batch_size
@@ -41,20 +37,20 @@ class Agent:
         # evaluate_net和target_net
         self.evaluate_net = self.build_net()
         self.target_net = self.build_net()
+        self.connect = np.loadtxt('./connect.csv', delimiter=',', dtype=int)
 
     def build_net(self):
         model = tf.keras.models.Sequential([
-                  tf.keras.layers.Flatten(input_shape=(2,)),
+                  tf.keras.layers.Flatten(input_shape=(self.n_features,)),
                   tf.keras.layers.Dense(256, activation='relu'),
-                  tf.keras.layers.Dense(256, activation='relu'),
-                  tf.keras.layers.Dense(256, activation='relu'),
-                  tf.keras.layers.Dropout(0.2),
+                  # tf.keras.layers.Dense(256, activation='relu'),
+                  # tf.keras.layers.Dense(256, activation='relu'),
                   tf.keras.layers.Dense(128, activation='relu'),
                   tf.keras.layers.Dropout(0.2),
                   tf.keras.layers.Dense(self.n_actions, activation='softmax')
                 ])
         model.compile(optimizer='adam',
-                      loss='binary_crossentropy',
+                      loss='categorical_crossentropy',
                       metrics=['accuracy'])
         return model
 
@@ -94,19 +90,21 @@ class Agent:
             batch_s_.append(replay[3])
         q_eval = self.evaluate_net.predict(batch_s)
         q_next = self.target_net.predict(batch_s_)
-
+        print("before, q_eval=", q_eval)
+        print("before, q_next=", q_next)
         # 使用公式更新Q值
         for i, replay in enumerate(batch_memory):
             _, a, reward, _ = replay
             q_eval[i][a] = (1 - self.lr) * q_eval[i][a] + self.lr * (reward + self.gamma * np.amax(q_next[i]))
 
+        print("after, q_eval_=", q_eval)
         # 训练 evaluate_net
-        batch_s_ndarray = tf.reshape(np.array(batch_s), [-1, 2])
-        self.evaluate_net.fit(batch_s_ndarray, q_eval)
-        print(batch_s_ndarray)
-        print("\n")
-        print(q_eval)
-        print("\n")
+        batch_s_shaped = tf.reshape(batch_s, [-1, 2])
+        self.evaluate_net.fit(batch_s_shaped, q_eval)
+        # print(batch_s_shaped)
+        # print("\n")
+        # print(q_eval)
+        # print("\n")
 
         # 增加 epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
