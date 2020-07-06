@@ -4,17 +4,16 @@ from env import Env
 
 if __name__ == "__main__":
     ENV = Env()
-    RL = Agent()
+    RL = Agent(1, 2)
 
     step = 1
     for episode in range(10000):
         ENV.reset()  # 重置环境
-        print("-----------episode:", episode)
+        print("episode:", episode)
         while True:
             observation = ENV.refresh_env()  # 获取环境信息
             action = RL.choose_action(observation)  # 神经网络根据信息做决策
             observation_, reward = ENV.taxi_refresh(action)  # 执行决策并获取环境反馈
-            # if reward >= -1.0:
             RL.store_transition(observation, action, reward, observation_)  # 存储经历
             print(ENV.taxi_loc)
             if step % 20 == 0:
