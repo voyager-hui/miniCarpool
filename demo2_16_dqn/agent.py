@@ -9,8 +9,6 @@ class Agent:
             self,
             n_features=2,
             n_actions=16,
-            IMG_HEIGHT=300,
-            IMG_WIDTH=300,
             learning_rate=0.01,
             batch_size=32,
             replace_target_iter=300,
@@ -22,8 +20,6 @@ class Agent:
         # 输入参数
         self.n_features = n_features
         self.n_actions = n_actions
-        self.IMG_HEIGHT = IMG_HEIGHT
-        self.IMG_WIDTH = IMG_WIDTH
         # 神经网络和DQN参数
         self.lr = learning_rate
         self.batch_size = batch_size
@@ -67,18 +63,12 @@ class Agent:
         self.memory_counter += 1
 
     def choose_action(self, observation):
-        while True:
-            hhhhhhh = False
-            if np.random.uniform() < self.epsilon:
-                observation_reshaped = tf.reshape(observation, [-1, 2])
-                actions_value = self.evaluate_net.predict(observation_reshaped)
-                action = np.argmax(actions_value[0])
-            else:
-                action = np.random.randint(0, self.n_actions)  # 完全随机选择
-                hhhhhhh = True
-            if self.connect[observation[0], action] != 0:
-                print(hhhhhhh)
-                break
+        if np.random.uniform() < self.epsilon:
+            observation_reshaped = tf.reshape(observation, [-1, 2])
+            actions_value = self.evaluate_net.predict(observation_reshaped)
+            action = np.argmax(actions_value[0])
+        else:
+            action = np.random.randint(0, self.n_actions)  # 完全随机选择
         return int(action)
 
     def learn(self):
@@ -111,10 +101,10 @@ class Agent:
         # 训练 evaluate_net
         batch_s_shaped = tf.reshape(batch_s, [-1, 2])
         self.evaluate_net.fit(batch_s_shaped, q_eval)
-        print(batch_s_shaped)
-        print("\n")
-        print(q_eval)
-        print("\n")
+        # print(batch_s_shaped)
+        # print("\n")
+        # print(q_eval)
+        # print("\n")
 
         # 增加 epsilon
         self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
