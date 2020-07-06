@@ -44,7 +44,7 @@ class Agent:
 
     def build_net(self):
         model = tf.keras.models.Sequential([
-                  tf.keras.layers.Flatten(input_shape=(self.n_features,)),
+                  tf.keras.layers.Flatten(input_shape=(2,)),
                   tf.keras.layers.Dense(256, activation='relu'),
                   tf.keras.layers.Dense(256, activation='relu'),
                   tf.keras.layers.Dense(256, activation='relu'),
@@ -63,13 +63,13 @@ class Agent:
         print("Target_net model saved to h5 file.")
 
     def store_transition(self, s, a, r, s_):
-        for i in range(len(s)):
-            self.memory.append((s[i], a, r, s_[i]))
-            self.memory_counter += 1
+        self.memory.append((s, a, r, s_))
+        self.memory_counter += 1
 
     def choose_action(self, observation):
         if np.random.uniform() < self.epsilon:
-            actions_value = self.evaluate_net.predict(observation)
+            observation_reshaped = tf.reshape(observation, [-1, 2])
+            actions_value = self.evaluate_net.predict(observation_reshaped)
             action = np.argmax(actions_value[0])
         else:
             action = np.random.randint(0, self.n_actions)  # 完全随机选择
@@ -92,7 +92,6 @@ class Agent:
         for replay in batch_memory:
             batch_s.append(replay[0])
             batch_s_.append(replay[3])
-
         q_eval = self.evaluate_net.predict(batch_s)
         q_next = self.target_net.predict(batch_s_)
 
@@ -102,7 +101,7 @@ class Agent:
             q_eval[i][a] = (1 - self.lr) * q_eval[i][a] + self.lr * (reward + self.gamma * np.amax(q_next[i]))
 
         # 训练 evaluate_net
-        batch_s_ndarray = np.array(batch_s)
+        batch_s_ndarray = tf.reshape(np.array(batch_s), [-1, 2])
         self.evaluate_net.fit(batch_s_ndarray, q_eval)
         print(batch_s_ndarray)
         print("\n")
