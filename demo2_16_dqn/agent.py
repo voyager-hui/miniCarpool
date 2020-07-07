@@ -47,7 +47,7 @@ class Agent:
                   # tf.keras.layers.Dense(256, activation='relu'),
                   tf.keras.layers.Dense(128, activation='relu'),
                   tf.keras.layers.Dropout(0.2),
-                  tf.keras.layers.Dense(self.n_actions, activation='softmax')
+                  tf.keras.layers.Dense(self.n_actions, activation='linear')
                 ])
         model.compile(optimizer='adam',
                       loss='categorical_crossentropy',
@@ -90,14 +90,14 @@ class Agent:
             batch_s_.append(replay[3])
         q_eval = self.evaluate_net.predict(batch_s)
         q_next = self.target_net.predict(batch_s_)
-        print("before, q_eval=", q_eval)
-        print("before, q_next=", q_next)
+        # print("before, q_eval=", q_eval)
+        # print("before, q_next=", q_next)
         # 使用公式更新Q值
         for i, replay in enumerate(batch_memory):
             _, a, reward, _ = replay
             q_eval[i][a] = (1 - self.lr) * q_eval[i][a] + self.lr * (reward + self.gamma * np.amax(q_next[i]))
 
-        print("after, q_eval_=", q_eval)
+        # print("after, q_eval_=", q_eval)
         # 训练 evaluate_net
         batch_s_shaped = tf.reshape(batch_s, [-1, 2])
         self.evaluate_net.fit(batch_s_shaped, q_eval)
