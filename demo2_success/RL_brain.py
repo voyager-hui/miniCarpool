@@ -11,7 +11,6 @@ gym: 0.7.3
 """
 
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 
 np.random.seed(1)
@@ -159,7 +158,7 @@ class DeepQNetwork:
         # check to replace target parameters
         if self.learn_step_counter % self.replace_target_iter == 0:
             self.sess.run(self.replace_target_op)
-            print('\ntarget_params_replaced\n')
+            # print('\ntarget_params_replaced\n')
 
         # sample batch memory from all memory
         if self.memory_counter > self.memory_size:
@@ -226,5 +225,3 @@ class DeepQNetwork:
         plt.ylabel('Cost')
         plt.xlabel('training steps')
         plt.show()
-
-
