@@ -11,6 +11,8 @@ class Env:
         self.reward = 0
         self.flag = True
         self.connect = np.loadtxt('./connect16.csv', delimiter=',', dtype=int)
+        self.up_loc = 4
+        self.down_loc = 11
 
     def reset(self, run_time=300):
         self.done = False  # 结束标志（current_time>=run_time）
@@ -30,27 +32,36 @@ class Env:
         self.get_observation()
         return self.observation
 
-    # 执行决策
+    def new_request(self):
+        self.up_loc = np.random.randint(0, 16)
+        self.down_loc = np.random.randint(0, 16)
+
     def taxi_refresh(self, action):
         self.reward = 0.0
         # 更新出租车位置
         next_loc = self.connect[self.taxi_loc, action]
         if next_loc != -1:
             self.taxi_loc = next_loc
+        else:
+            self.reward = -0.1
         # 是否到达上车点
-        if self.taxi_loc == 14 and self.flag:
-            self.flag = False
-            self.reward = 3.0
-        # 是否到达下车点
-        if self.taxi_loc == 7 and not self.flag:
-            self.done = True
+        if self.taxi_loc == self.up_loc and self.flag:
+            self.get_observation()
             self.reward = 4.0
+            self.flag = False
+            return self.observation, self.reward
+        # 是否到达下车点
+        if self.taxi_loc == self.down_loc and not self.flag:
+            self.get_observation()
+            self.reward = 4.0
+            self.done = True
+            self.new_request()
+            return self.observation, self.reward
         self.get_observation()
         return self.observation, self.reward
 
-    # 生成 observation
     def get_observation(self):
         if self.flag:
-            self.observation = np.array([(float(self.taxi_loc))/16, 1])
+            self.observation = np.array([float(self.taxi_loc)/16, float(self.up_loc)/16])
         else:
-            self.observation = np.array([(float(self.taxi_loc))/16, 0])
+            self.observation = np.array([float(self.taxi_loc)/16, float(self.down_loc)/16])
